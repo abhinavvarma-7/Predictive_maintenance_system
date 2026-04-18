@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Predictive Maintenance at the Edge</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg: '#050505',
+        panel: '#0A0A0A',
+        txt: '#F7F8F8',
+        sub: '#8A8F98',
+        accent: '#5E6AD2',
+        green: '#4DAF73',
+        yellow: '#E2B340',
+        red: '#E5534B',
+        border: 'rgba(255,255,255,0.08)',
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    overflow: hidden; height: 100%;
+    background: #050505; color: #F7F8F8;
+    font-family: 'Inter', sans-serif;
+    position: relative;
+    z-index: 0;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 80px 100px;
+    opacity: 0; transform: translateY(20px);
+    pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    z-index: 1;
+  }
+  .slide.active {
+    opacity: 1; transform: translateY(0);
+    pointer-events: all;
+    z-index: 2;
+  }
+
+  .code-block {
+    background: #0E0E10;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: #8A8F98;
+    overflow-x: auto;
+    position: relative;
+  }
+  .code-block .kw { color: #E5534B; }
+  .code-block .fn { color: #5E6AD2; }
+  .code-block .str { color: #4DAF73; }
+  .code-block .cm { color: #555; font-style: italic; }
+  .code-block .num { color: #E2B340; }
+  .code-block .type { color: #F7F8F8; }
+  .code-block .op { color: #8A8F98; }
+  .code-block .mac { color: #E2B340; }
+
+  .code-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 8px;
+  }
+
+  .tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px; font-weight: 500;
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: #8A8F98;
+  }
+
+  .process-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 24px 28px;
+    transition: border-color 0.3s;
+  }
+  .process-card:hover { border-color: rgba(255,255,255,0.15); }
+
+  .nav-btn {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(10,10,10,0.9);
+    backdrop-filter: blur(8px);
+    color: #8A8F98;
+    cursor: pointer;
+    transition: all 0.25s;
+    z-index: 9999;
+  }
+  .nav-btn:hover { border-color: rgba(255,255,255,0.25); color: #F7F8F8; background: rgba(20,20,22,0.95); }
+  .nav-btn:active { transform: translateY(-50%) scale(0.92); }
+  .nav-btn.disabled { opacity: 0.2; pointer-events: none; }
+
+  .progress-bar {
+    position: fixed; bottom: 0; left: 0; height: 2px;
+    background: linear-gradient(90deg, #5E6AD2, #7B83EB);
+    transition: width 0.4s ease;
+    z-index: 9999;
+  }
+
+  .slide-counter {
+    position: fixed; bottom: 20px; right: 40px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #444;
+    z-index: 9999;
+  }
+
+  .highlight-box {
+    border-left: 3px solid #5E6AD2;
+    padding-left: 16px;
+    color: #8A8F98;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .flow-step {
+    display: flex; align-items: flex-start; gap: 16px;
+  }
+  .flow-step .step-num {
+    flex-shrink: 0;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #8A8F98;
+  }
+  .flow-step.active-step .step-num {
+    background: #5E6AD2; border-color: #5E6AD2; color: #fff;
+  }
+
+  .diagram-line-accent {
+    stroke: #5E6AD2; stroke-width: 1.5; fill: none;
+    stroke-dasharray: 6 4;
+    animation: dash-flow 1.5s linear infinite;
+  }
+  @keyframes dash-flow {
+    to { stroke-dashoffset: -20; }
+  }
+
+  .badge-nominal { color: #4DAF73; border-color: rgba(77,175,115,0.3); background: rgba(77,175,115,0.06); }
+  .badge-warning { color: #E2B340; border-color: rgba(226,179,64,0.3); background: rgba(226,179,64,0.06); }
+  .badge-critical { color: #E5534B; border-color: rgba(229,83,75,0.3); background: rgba(229,83,75,0.06); }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<button class="nav-btn disabled" id="prevBtn" style="left: 24px;" onclick="prevSlide()">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 3L5 8l5 5"/></svg>
+</button>
+<button class="nav-btn" id="nextBtn" style="right: 24px;" onclick="nextSlide()">
+  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 3l5 5-5 5"/></svg>
+</button>
+
+<div class="progress-bar" id="progressBar" style="width: 11.11%;"></div>
+<div class="slide-counter" id="slideCounter">01 / 09</div>
+
+<!-- ======================== SLIDE 1: Title ======================== -->
+<div class="slide active" data-slide="0">
+  <div class="max-w-4xl">
+    <div class="flex gap-3 mb-8">
+      <span class="tag"><span style="width:6px;height:6px;border-radius:50%;background:#4DAF73;display:inline-block;"></span> QNX Neutrino RTOS</span>
+      <span class="tag">Raspberry Pi 4</span>
+      <span class="tag">Edge Computing</span>
+    </div>
+    <h1 class="text-6xl font-semibold leading-tight tracking-tight mb-6" style="letter-spacing:-0.03em;">
+      Predictive Maintenance<br>at the Edge
+    </h1>
+    <p class="text-xl text-sub font-light leading-relaxed mb-10 max-w-2xl">
+      Leveraging QNX RTOS Microkernel Architecture on Raspberry Pi 4 for deterministic, real-time industrial fault detection.
+    </p>
+    <div class="flex gap-16">
+      <div>
+        <div class="text-xs text-sub uppercase tracking-widest mb-2 font-mono">Process 1</div>
+        <div class="text-sm font-medium">Real-time Deterministic<br>Sensor Fusion</div>
+      </div>
+      <div>
+        <div class="text-xs text-sub uppercase tracking-widest mb-2 font-mono">Process 2</div>
+        <div class="text-sm font-medium">Edge AI / DSP Math<br>Linear Regression</div>
+      </div>
+      <div>
+        <div class="text-xs text-sub uppercase tracking-widest mb-2 font-mono">Process 3</div>
+        <div class="text-sm font-medium">Asynchronous Cloud<br>Telemetry over UDP</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 2: Architecture ======================== -->
+<div class="slide" data-slide="1">
+  <div class="max-w-5xl w-full">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">System Architecture</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">Three Isolated QNX Processes</h2>
+    <p class="text-sub text-base mb-10 max-w-2xl">Each process runs in its own memory-protected address space, communicating exclusively through synchronous QNX message passing.</p>
+
+    <div class="grid grid-cols-3 gap-5">
+      <div class="process-card">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(94,106,210,0.15);color:#5E6AD2;">1</div>
+          <div class="font-semibold text-sm">Sensor Core</div>
+        </div>
+        <div class="text-xs text-sub leading-relaxed mb-4">
+          Runs as <span class="font-mono text-txt">root</span>. Maps hardware memory directly. Polls MPU-6500 (I2C), DHT11 (GPIO bit-bang), SW420 (GPIO) every <span class="font-mono text-yellow">500ms</span>.
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="tag text-[10px]">I2C</span>
+          <span class="tag text-[10px]">GPIO</span>
+          <span class="tag text-[10px]">mmap</span>
+        </div>
+      </div>
+
+      <div class="process-card" style="border-color:rgba(94,106,210,0.25);">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(94,106,210,0.25);color:#5E6AD2;">2</div>
+          <div class="font-semibold text-sm">Predictive Gateway</div>
+          <span class="text-[9px] font-mono px-1.5 py-0.5 rounded" style="background:rgba(94,106,210,0.12);color:#5E6AD2;">BRAIN</span>
+        </div>
+        <div class="text-xs text-sub leading-relaxed mb-4">
+          Polls Sensor Core every <span class="font-mono text-yellow">5s</span>. Executes linear regression over 12-sample sliding window. Evaluates slope thresholds.
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="tag text-[10px]">DSP Math</span>
+          <span class="tag text-[10px]">Regression</span>
+          <span class="tag text-[10px]">Thresholds</span>
+        </div>
+      </div>
+
+      <div class="process-card">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold" style="background:rgba(94,106,210,0.15);color:#5E6AD2;">3</div>
+          <div class="font-semibold text-sm">Alert Node</div>
+          <span class="text-[9px] font-mono px-1.5 py-0.5 rounded" style="background:rgba(77,175,115,0.1);color:#4DAF73;">NETWORKER</span>
+        </div>
+        <div class="text-xs text-sub leading-relaxed mb-4">
+          Receives alert states from Gateway. Formats JSON payloads. Sends UDP datagrams to the Node.js dashboard.
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="tag text-[10px]">JSON</span>
+          <span class="tag text-[10px]">UDP</span>
+          <span class="tag text-[10px]">Async I/O</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-center gap-3 mt-6 text-sub text-xs font-mono">
+      <span>Sensor Core</span>
+      <svg width="40" height="12"><line x1="0" y1="6" x2="30" y2="6" class="diagram-line-accent"/><polygon points="30,2 38,6 30,10" fill="#5E6AD2"/></svg>
+      <span>Predictive Gateway</span>
+      <svg width="40" height="12"><line x1="0" y1="6" x2="30" y2="6" class="diagram-line-accent"/><polygon points="30,2 38,6 30,10" fill="#5E6AD2"/></svg>
+      <span>Alert Node</span>
+      <svg width="40" height="12"><line x1="0" y1="6" x2="30" y2="6" stroke="#4DAF73" stroke-width="1.5" stroke-dasharray="6 4"/><polygon points="30,2 38,6 30,10" fill="#4DAF73"/></svg>
+      <span style="color:#4DAF73;">Dashboard</span>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 3: Boot & Init ======================== -->
+<div class="slide" data-slide="2">
+  <div class="max-w-4xl">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">Phase 1 & 2 — Sequence</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">QNX Boot & Server Initialization</h2>
+    <p class="text-sub text-base mb-10 max-w-2xl">How the microkernel brings services online and prepares the IPC channel.</p>
+
+    <div class="flex flex-col gap-6">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="text-sm font-medium mb-1">Microkernel Launch</div>
+          <div class="text-xs text-sub leading-relaxed">
+            <span class="font-mono text-txt">procnto</span> starts — initializes the MMU, Thread Manager, and Timer services. No device drivers, no filesystem, just the bare scheduler.
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step active-step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="text-sm font-medium mb-1">Service Registration via <span class="font-mono text-accent">name_attach()</span></div>
+          <div class="text-xs text-sub leading-relaxed">
+            Sensor Core and Alert Node launch first. Each calls <span class="font-mono text-txt">name_attach(NULL, "sensor_core", 0)</span> and <span class="font-mono text-txt">name_attach(NULL, "alert_node", 0)</span> to register their IPC channel with the QNX name server (<span class="font-mono text-txt">resmgr</span>).
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="text-sm font-medium mb-1">Block on <span class="font-mono text-accent">MsgReceive()</span></div>
+          <div class="text-xs text-sub leading-relaxed">
+            Both servers enter a blocked state inside <span class="font-mono text-txt">MsgReceive()</span>, consuming <span class="text-green">0% CPU</span>. They remain dormant until the Predictive Gateway initiates the first transaction.
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div>
+          <div class="text-sm font-medium mb-1">Gateway Connects via <span class="font-mono text-accent">name_open()</span></div>
+          <div class="text-xs text-sub leading-relaxed">
+            The Predictive Gateway launches last. It calls <span class="font-mono text-txt">name_open("sensor_core", 0)</span> to obtain a connection ID, then fires the first <span class="font-mono text-txt">MsgSend()</span> — igniting the entire system loop.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight-box mt-8">
+      <strong class="text-txt text-xs">Key Insight:</strong> The server processes are ready before the client exists. This is standard QNX design — servers attach names, clients discover them. Order of launch is intentional, not coincidental.
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 4: Sensor Core ======================== -->
+<div class="slide" data-slide="3">
+  <div class="max-w-5xl w-full">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">Process 1 — Data Acquisition</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">The Sensor Core</h2>
+    <p class="text-sub text-base mb-8 max-w-2xl">A dedicated hardware thread polls all three sensors at 500ms intervals, shielded from IPC interference by a POSIX mutex.</p>
+
+    <div class="grid grid-cols-2 gap-8 items-start">
+      <div>
+        <div class="code-label">sensor_core.c — hardware_thread</div>
+        <div class="code-block">
+<span class="kw">void</span> <span class="fn">*hardware_thread</span>(<span class="kw">void</span> *arg) {
+    <span class="kw">while</span> (running) {
+        <span class="cm">// Read MPU-6500 via I2C</span>
+        accel_x = <span class="fn">read_mpu_axis</span>(I2C_FD, <span class="num">0x3B</span>);
+        accel_z = <span class="fn">read_mpu_axis</span>(I2C_FD, <span class="num">0x3F</span>);
+
+        <span class="cm">// Read DHT11 via GPIO bit-bang</span>
+        temp = <span class="fn">dht11_read_temp</span>(DHT_PIN);
+        hum  = <span class="fn">dht11_read_hum</span>(DHT_PIN);
+
+        <span class="cm">// Read SW420 vibration (digital)</span>
+        vib = <span class="fn">gpio_read</span>(SW420_PIN);
+
+        <span class="cm">// Critical section — lock shared state</span>
+        <span class="fn">pthread_mutex_lock</span>(&state_mutex);
+        current_state.accel_x = accel_x;
+        current_state.accel_z = accel_z;
+        current_state.temp    = temp;
+        current_state.hum     = hum;
+        current_state.vib     = vib;
+        <span class="fn">pthread_mutex_unlock</span>(&state_mutex);
+
+        <span class="fn">delay</span>(<span class="num">500</span>); <span class="cm">// 500ms poll cycle</span>
+    }
+    <span class="kw">return</span> <span class="num">NULL</span>;
+}
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-5">
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">WHY THE MUTEX?</div>
+          <div class="text-xs text-sub leading-relaxed">
+            When the Gateway sends a <span class="font-mono text-txt">MsgSend</span>, the Sensor Core's IPC thread wakes up and reads <span class="font-mono text-txt">current_state</span>. Without the mutex, the hardware thread could be mid-write — sending partially-corrupted data (e.g., new X but old Z).
+          </div>
+        </div>
+
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">SENSOR DETAILS</div>
+          <div class="text-xs text-sub leading-relaxed space-y-1.5">
+            <div class="flex justify-between"><span>MPU-6500</span><span class="font-mono text-txt">I2C @ 0x68</span></div>
+            <div class="flex justify-between"><span>DHT11</span><span class="font-mono text-txt">GPIO 4 (bit-bang)</span></div>
+            <div class="flex justify-between"><span>SW420</span><span class="font-mono text-txt">GPIO 17 (digital)</span></div>
+          </div>
+        </div>
+
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">THREAD MODEL</div>
+          <div class="text-xs text-sub leading-relaxed">
+            Two threads within one process: <span class="text-txt">hardware_thread</span> (500ms polling loop) and the <span class="text-txt">main IPC thread</span> (blocks on MsgReceive). Both share <span class="font-mono text-txt">current_state</span> via the mutex.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 5: Synchronous IPC ======================== -->
+<div class="slide" data-slide="4">
+  <div class="max-w-4xl">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">QNX IPC Mechanism</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">Synchronous IPC — The Heartbeat</h2>
+    <p class="text-sub text-base mb-10 max-w-2xl">The fundamental building block of every QNX RTOS system. No queues, no signals, no shared memory — just blocking send/receive/reply.</p>
+
+    <div class="flex flex-col gap-5">
+      <div class="grid grid-cols-3 gap-4">
+        <div class="process-card text-center">
+          <div class="text-xs font-mono text-accent mb-2">MsgSend()</div>
+          <div class="text-lg font-semibold mb-1" style="color:#E2B340;">BLOCKED</div>
+          <div class="text-[11px] text-sub leading-relaxed">
+            Gateway calls MsgSend and is put to sleep by the kernel. CPU usage drops to exactly zero. No polling. No spinlocks.
+          </div>
+        </div>
+
+        <div class="process-card text-center" style="border-color:rgba(94,106,210,0.25);">
+          <div class="text-xs font-mono text-accent mb-2">MsgReceive()</div>
+          <div class="text-lg font-semibold mb-1" style="color:#4DAF73;">RUNNING</div>
+          <div class="text-[11px] text-sub leading-relaxed">
+            Sensor Core unblocks, inherits Gateway's priority (priority inheritance), copies locked state into the reply buffer.
+          </div>
+        </div>
+
+        <div class="process-card text-center">
+          <div class="text-xs font-mono text-accent mb-2">MsgReply()</div>
+          <div class="text-lg font-semibold mb-1" style="color:#5E6AD2;">READY</div>
+          <div class="text-[11px] text-sub leading-relaxed">
+            Sensor Core replies with sensor_packet_t. Gateway unblocks with fresh data — guaranteed consistent, no race conditions.
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block" style="max-width:600px;">
+<span class="cm">// Gateway side — the 5-second heartbeat</span>
+<span class="kw">while</span> (running) {
+    <span class="fn">MsgSend</span>(sensor_coid, &msg, <span class="kw">sizeof</span>(msg),
+                      &packet, <span class="kw">sizeof</span>(packet));
+    <span class="cm">// packet now contains fresh, mutex-protected data</span>
+    <span class="fn">process_prediction</span>(&packet);
+    <span class="fn">delay</span>(<span class="num">5000</span>);
+}
+      </div>
+
+      <div class="highlight-box">
+        <strong class="text-txt text-xs">Why Not Pipes / Sockets?</strong>
+        QNX MsgSend/Receive/Reply is a single kernel call that handles both data transfer and synchronization. No intermediate buffers, no copy steps, no priority inversions. The kernel guarantees the receiver runs at the sender's priority the instant the message is sent.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 6: Predictive Gateway ======================== -->
+<div class="slide" data-slide="5">
+  <div class="max-w-5xl w-full">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">Process 2 — Edge Intelligence</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">The Predictive Gateway</h2>
+    <p class="text-sub text-base mb-8 max-w-2xl">We don't just read data — we compute trend slopes to predict failure before it happens.</p>
+
+    <div class="grid grid-cols-2 gap-8 items-start">
+      <div>
+        <div class="code-label">gateway.c — PREDICTIVE MATH</div>
+        <div class="code-block">
+<span class="cm">// 12-sample sliding window linear regression</span>
+<span class="kw">float</span> <span class="fn">calc_slope</span>(<span class="kw">float</span> *y, <span class="kw">int</span> n) {
+    <span class="kw">float</span> sum_x=<span class="num">0</span>, sum_y=<span class="num">0</span>, sum_xy=<span class="num">0</span>, sum_x2=<span class="num">0</span>;
+    <span class="kw">for</span> (<span class="kw">int</span> i=<span class="num">0</span>; i&lt;n; i++) {
+        sum_x  += (<span class="kw">float</span>)i;
+        sum_y  += y[i];
+        sum_xy += (<span class="kw">float</span>)i * y[i];
+        sum_x2 += (<span class="kw">float</span>)i * (<span class="kw">float</span>)i;
+    }
+    <span class="kw">float</span> denom = n * sum_x2 - sum_x * sum_x;
+    <span class="kw">return</span> (n * sum_xy - sum_x * sum_y) / denom;
+}
+
+<span class="cm">// Evaluate thresholds</span>
+slope_z    = <span class="fn">calc_slope</span>(hist_z, HISTORY_SIZE);
+slope_temp = <span class="fn">calc_slope</span>(hist_temp, HISTORY_SIZE);
+
+<span class="kw">if</span> (slope_z > <span class="num">5.0</span>)
+    status = PREDICTIVE_WARNING;
+<span class="kw">else if</span> (slope_z > <span class="num">10.0</span> || slope_temp > <span class="num">2.0</span>)
+    status = CRITICAL;
+<span class="kw">else</span>
+    status = NOMINAL;
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-5">
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">SLIDING WINDOW</div>
+          <div class="text-xs text-sub leading-relaxed">
+            We maintain a circular buffer of <span class="font-mono text-txt">HISTORY_SIZE = 12</span> samples (60 seconds of data at 5s intervals). Each new reading pushes the oldest out.
+          </div>
+        </div>
+
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">WHY SLOPE, NOT THRESHOLD?</div>
+          <div class="text-xs text-sub leading-relaxed">
+            Hard limits trigger too late — vibration is already dangerous. By computing the <span class="text-txt">rate of change</span> (slope), we detect that vibration is <em>accelerating</em> toward failure, giving operators a predictive warning window.
+          </div>
+        </div>
+
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">THRESHOLD LOGIC</div>
+          <div class="space-y-2 mt-1">
+            <div class="flex items-center gap-3">
+              <span class="tag badge-nominal text-[10px]">slope_z &lt; 5.0</span>
+              <span class="text-xs text-sub">Nominal — normal operation</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="tag badge-warning text-[10px]">slope_z &gt; 5.0</span>
+              <span class="text-xs text-sub">Predictive Warning — trend rising</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="tag badge-critical text-[10px]">slope_z &gt; 10.0</span>
+              <span class="text-xs text-sub">Critical — imminent failure</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 7: Alert Node ======================== -->
+<div class="slide" data-slide="6">
+  <div class="max-w-5xl w-full">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">Process 3 — Decoupled Telemetry</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">The Alert Node</h2>
+    <p class="text-sub text-base mb-8 max-w-2xl">Network I/O is inherently non-deterministic. This process isolates it from the critical prediction loop.</p>
+
+    <div class="grid grid-cols-2 gap-8 items-start">
+      <div>
+        <div class="code-label">alert_node.c — IPC receive + reply-first pattern</div>
+        <div class="code-block">
+<span class="kw">while</span> (running) {
+    rcvid = <span class="fn">MsgReceive</span>(chid, &msg,
+                            <span class="kw">sizeof</span>(msg), NULL);
+
+    <span class="cm">// *** CRITICAL: Reply immediately ***</span>
+    <span class="fn">MsgReply</span>(rcvid, EOK, NULL, <span class="num">0</span>);
+
+    <span class="cm">// Gateway is already unblocked and back</span>
+    <span class="cm">// to its 5s math loop. We work async.</span>
+
+    <span class="cm">// Format JSON payload</span>
+    <span class="fn">snprintf</span>(json_buf, BUF_SZ,
+      <span class="str">"{\"status\":%d,\"z\":%.2f,"
+      "\"temp\":%.1f,\"slope_z\":%.3f}"</span>,
+      msg.status, msg.accel_z,
+      msg.temp, msg.slope_z);
+
+    <span class="cm">// UDP send — may block, we don't care</span>
+    <span class="fn">sendto</span>(udp_fd, json_buf,
+            <span class="fn">strlen</span>(json_buf), <span class="num">0</span>,
+            (<span class="kw">struct sockaddr</span>*)&dest,
+            <span class="kw">sizeof</span>(dest));
+}
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-5">
+        <div class="process-card" style="border-color:rgba(77,175,115,0.25);">
+          <div class="text-xs font-mono mb-2" style="color:#4DAF73;">THE REPLY-FIRST PATTERN</div>
+          <div class="text-xs text-sub leading-relaxed">
+            The single most important architectural decision in this process. By calling <span class="font-mono text-txt">MsgReply(rcvid, EOK, NULL, 0)</span> <strong class="text-txt">before</strong> any JSON formatting or socket work, the Gateway is instantly unblocked.
+          </div>
+        </div>
+
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">WHAT THIS PREVENTS</div>
+          <div class="text-xs text-sub leading-relaxed">
+            If the network is congested, <span class="font-mono text-txt">sendto()</span> could block for hundreds of milliseconds. Without the reply-first pattern, the Gateway would be stuck waiting — missing its 5s prediction cycle, breaking determinism.
+          </div>
+        </div>
+
+        <div class="process-card">
+          <div class="text-xs font-mono text-accent mb-2">MEMORY SAFETY</div>
+          <div class="text-xs text-sub leading-relaxed">
+            Since the Alert Node is a separate QNX process, a crash in JSON formatting or a socket error <strong class="text-txt">cannot</strong> corrupt the Gateway's memory space. The microkernel enforces this at the hardware MMU level.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 8: Dashboard ======================== -->
+<div class="slide" data-slide="7">
+  <div class="max-w-4xl">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">Visualization Layer</div>
+    <h2 class="text-4xl font-semibold tracking-tight mb-3" style="letter-spacing:-0.02em;">The Dashboard</h2>
+    <p class="text-sub text-base mb-10 max-w-2xl">Node.js catches UDP datagrams and pushes real-time telemetry to the browser — no polling, no refresh.</p>
+
+    <div class="grid grid-cols-2 gap-6">
+      <div class="process-card">
+        <div class="text-xs font-mono text-accent mb-3">BACKEND</div>
+        <div class="text-xs text-sub leading-relaxed space-y-2">
+          <div class="flex items-start gap-2">
+            <span class="text-green mt-0.5">→</span>
+            <span>Node.js <span class="font-mono text-txt">dgram</span> socket listens on UDP port <span class="font-mono text-txt">9876</span></span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-green mt-0.5">→</span>
+            <span> Parses incoming JSON into typed objects</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-green mt-0.5">→</span>
+            <span> Broadcasts to all connected browser clients via <span class="font-mono text-txt">Server-Sent Events</span></span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-green mt-0.5">→</span>
+            <span> Zero-latency push — browser doesn't ask, server tells</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="process-card">
+        <div class="text-xs font-mono text-accent mb-3">FRONTEND</div>
+        <div class="text-xs text-sub leading-relaxed space-y-2">
+          <div class="flex items-start gap-2">
+            <span class="text-yellow mt-0.5">→</span>
+            <span><span class="font-mono text-txt">Chart.js</span> line graphs update in real-time — accel Z, temperature, slope trends</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-yellow mt-0.5">→</span>
+            <span> System status badge updates dynamically without page refresh</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="text-yellow mt-0.5">→</span>
+            <span> DOM mutations kept minimal for performance</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 process-card" style="padding:0;overflow:hidden;">
+      <div style="background:#080808;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.06);" class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="flex gap-1.5">
+            <span style="width:8px;height:8px;border-radius:50%;background:#E5534B;display:inline-block;"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#E2B340;display:inline-block;"></span>
+            <span style="width:8px;height:8px;border-radius:50%;background:#4DAF73;display:inline-block;"></span>
+          </div>
+          <span class="text-[10px] font-mono text-sub">localhost:3000 — Predictive Maintenance Dashboard</span>
+        </div>
+        <span class="tag badge-warning text-[10px]">PREDICTIVE WARNING</span>
+      </div>
+      <div style="padding:20px 24px;background:#060606;" class="flex gap-6">
+        <div class="flex-1">
+          <div class="text-[10px] font-mono text-sub mb-2">Z-AXIS ACCELERATION</div>
+          <svg viewBox="0 0 300 80" class="w-full">
+            <polyline points="0,60 25,55 50,50 75,48 100,42 125,38 150,30 175,28 200,22 225,18 250,12 275,10 300,5" fill="none" stroke="#5E6AD2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,60 25,55 50,50 75,48 100,42 125,38 150,30 175,28 200,22 225,18 250,12 275,10 300,5" fill="url(#gradZ)" stroke="none" opacity="0.15"/>
+            <defs><linearGradient id="gradZ" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5E6AD2"/><stop offset="100%" stop-color="transparent"/></linearGradient></defs>
+          </svg>
+        </div>
+        <div class="flex-1">
+          <div class="text-[10px] font-mono text-sub mb-2">TEMPERATURE (°C)</div>
+          <svg viewBox="0 0 300 80" class="w-full">
+            <polyline points="0,40 25,42 50,38 75,41 100,39 125,43 150,40 175,42 200,44 225,43 250,45 275,44 300,46" fill="none" stroke="#E2B340" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="0,40 25,42 50,38 75,41 100,39 125,43 150,40 175,42 200,44 225,43 250,45 275,44 300,46" fill="url(#gradT)" stroke="none" opacity="0.1"/>
+            <defs><linearGradient id="gradT" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#E2B340"/><stop offset="100%" stop-color="transparent"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SLIDE 9: Conclusion ======================== -->
+<div class="slide" data-slide="8">
+  <div class="max-w-4xl">
+    <div class="text-xs font-mono uppercase tracking-widest text-sub mb-4">Conclusion</div>
+    <h2 class="text-5xl font-semibold tracking-tight mb-4" style="letter-spacing:-0.03em;">Why QNX?</h2>
+    <p class="text-sub text-lg font-light mb-12 max-w-2xl">Because in predictive maintenance, a missed deadline isn't a dropped frame — it's a missed failure.</p>
+
+    <div class="grid grid-cols-2 gap-5 mb-10">
+      <div class="process-card">
+        <div class="flex items-center gap-2 mb-3">
+          <svg width="16" height="16" fill="none" stroke="#E5534B" stroke-width="2"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          <span class="text-sm font-medium" style="color:#E5534B;">Standard Linux</span>
+        </div>
+        <div class="text-xs text-sub leading-relaxed space-y-1">
+          <div>• CFS scheduler — no timing guarantees</div>
+          <div>• Thread starvation under I/O load</div>
+          <div>• Network stack can block kernel paths</div>
+          <div>• Shared memory — one crash kills all</div>
+          <div>• Non-deterministic interrupt latency</div>
+        </div>
+      </div>
+
+      <div class="process-card" style="border-color:rgba(94,106,210,0.25);">
+        <div class="flex items-center gap-2 mb-3">
+          <svg width="16" height="16" fill="none" stroke="#4DAF73" stroke-width="2"><path d="M3 8l4 4 6-8"/></svg>
+          <span class="text-sm font-medium" style="color:#4DAF73;">QNX Neutrino RTOS</span>
+        </div>
+        <div class="text-xs text-sub leading-relaxed space-y-1">
+          <div>• Strict priority scheduling — guaranteed order</div>
+          <div>• Priority inheritance prevents inversion</div>
+          <div>• Network in separate process — isolated</div>
+          <div>• MMU-protected processes — crash-safe</div>
+          <div>• Bounded, deterministic interrupt latency</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight-box" style="border-left-color:#4DAF73;">
+      <strong class="text-txt text-sm">The Bottom Line</strong>
+      <div class="text-xs text-sub leading-relaxed mt-1">
+        By utilizing the QNX microkernel, synchronous message passing, and priority inheritance, our edge node guarantees that mathematical evaluation occurs <em>exactly</em> when required — completely isolated from hardware hiccups, sensor stalls, or network dropouts. This is what real-time means.
+      </div>
+    </div>
+
+    <div class="mt-10 flex items-center gap-4">
+      <div class="tag" style="border-color:rgba(94,106,210,0.2);color:#5E6AD2;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="5"/></svg>
+        Microkernel Architecture
+      </div>
+      <div class="tag" style="border-color:rgba(94,106,210,0.2);color:#5E6AD2;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="5"/></svg>
+        Deterministic IPC
+      </div>
+      <div class="tag" style="border-color:rgba(94,106,210,0.2);color:#5E6AD2;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="5"/></svg>
+        Fault Isolation
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let current = 0;
+  const total = 9;
+  const slides = document.querySelectorAll('.slide');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const progressBar = document.getElementById('progressBar');
+  const slideCounter = document.getElementById('slideCounter');
+
+  function updateSlide() {
+    slides.forEach((s, i) => {
+      s.classList.toggle('active', i === current);
+    });
+    prevBtn.classList.toggle('disabled', current === 0);
+    nextBtn.classList.toggle('disabled', current === total - 1);
+    progressBar.style.width = ((current + 1) / total * 100) + '%';
+    slideCounter.textContent = String(current + 1).padStart(2, '0') + ' / ' + String(total).padStart(2, '0');
+  }
+
+  function nextSlide() {
+    if (current < total - 1) { current++; updateSlide(); }
+  }
+
+  function prevSlide() {
+    if (current > 0) { current--; updateSlide(); }
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+      e.preventDefault(); nextSlide();
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault(); prevSlide();
+    }
+    if (e.key === 'Home') { e.preventDefault(); current = 0; updateSlide(); }
+    if (e.key === 'End') { e.preventDefault(); current = total - 1; updateSlide(); }
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', function(e) { touchStartX = e.changedTouches[0].screenX; });
+  document.addEventListener('touchend', function(e) {
+    const diff = touchStartX - e.changedTouches[0].screenX;
+    if (Math.abs(diff) > 50) { diff > 0 ? nextSlide() : prevSlide(); }
+  });
+</script>
+</body>
+</html>
