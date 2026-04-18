@@ -8,20 +8,19 @@
 #include <arpa/inet.h>
 #include "shared_ipc.h"
 
-// CHANGE TO YOUR LAPTOP IP
 //#define DASHBOARD_IP "10.40.1.120"
 #define D_IP "10.0.0.2"
 #define D_PORT 5005
 
 int main(void) {
-    // 1. Register with the OS Namespace
+    
     name_attach_t *attach = name_attach(NULL, ALERT_SERVER_NAME, 0);
     if (attach == NULL) {
         perror("[FATAL] name_attach failed. Alert Node already running?");
         return EXIT_FAILURE;
     }
 
-    // 2. Setup UDP Socket
+    
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     struct sockaddr_in servaddr;
     memset(&servaddr, 0, sizeof(servaddr));
@@ -36,15 +35,15 @@ int main(void) {
     printf("[ALERT NODE] Online. Waiting for Predictor triggers...\n");
 
     while (1) {
-        // Block until the Predictor sends us math results
+        
         int rcvid = MsgReceive(attach->chid, &msg, sizeof(msg), NULL);
 
         if (rcvid > 0 && msg.msg_type == MSG_TYPE_ALERT_DATA) {
 
-            // Unblock the Predictor immediately so it can go back to math
+            
             MsgReply(rcvid, EOK, &reply, sizeof(reply));
 
-            // --- CONSOLE ALERT LOGIC ---
+           
             if (msg.alert_level == 2) {
                 printf("\n[ALERT NODE] CRITICAL: %s\n", msg.alert_text);
             } else if (msg.alert_level == 1) {
@@ -53,7 +52,7 @@ int main(void) {
                 printf("[ALERT NODE] System nominal. Z-Slope: %.2f | T-Slope: %.2f\n", msg.slope_z, msg.slope_temp);
             }
 
-            // --- CLOUD TELEMETRY LOGIC ---
+            
             snprintf(json_payload, sizeof(json_payload),
                 "{\"x_raw\": %d, \"y_raw\": %d, \"z_raw\": %d, "
                 "\"temp_raw\": %d, \"vib_raw\": %d, "
